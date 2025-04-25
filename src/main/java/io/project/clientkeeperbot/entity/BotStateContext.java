@@ -13,13 +13,15 @@ public class BotStateContext {
     @Id
     private String userId;
 
-    @Lob
-    @Column(columnDefinition = "bytea")
-    private byte[] stateContext;
-
     @Enumerated(EnumType.STRING)
-    private BotState currentState;
+    private BotState currentState;// Состояние пользователя в боте
 
-    private LocalDateTime lastUpdated;
+    private LocalDateTime lastUpdated;// Время последнего обновления состояния
+
+    @Transient // <--- Добавляем это!
+    private RequestsDraft draft;
     // + getters/setters
 }
+
+
+

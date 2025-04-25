@@ -1,71 +1,157 @@
 package io.project.clientkeeperbot.service;
 
-import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Component
-public class AdminService extends TelegramLongPollingBot {
-    private static final List<Long> ADMIN_IDS = List.of(6180241984L); // Ваш Telegram ID !!!!!!!!!!
+@Service
+@RequiredArgsConstructor
+public class AdminService {
 
-    @Override
-    public void onUpdateReceived(Update update) {
-        if (!ADMIN_IDS.contains(update.getMessage().getChatId())) return;
+    private final AdminAuthService adminAuthService;
 
-        if (update.getMessage().getText().equals("/admin")) {
-            SendMessage panel = new SendMessage();
-            panel.setText("Админ-панель:");
+    // Метод для отправки админ-панели с кнопками
+    public void showAdminPanel(Long chatId, TelegramBot telegramBot) throws TelegramApiException {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("Админ-панель: Выберите действие:");
 
-            // Создаем ряды кнопок (каждый ряд - отдельный KeyboardRow)
-            List<KeyboardRow> keyboardRows = new ArrayList<>();
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
 
-            // Первый ряд кнопок
-            KeyboardRow row1 = new KeyboardRow();
-            row1.add(new KeyboardButton("Модерация заявок"));
-            row1.add(new KeyboardButton("Добавить FAQ"));
+        // Первая строка
+        InlineKeyboardButton moderationButton = new InlineKeyboardButton();
+        moderationButton.setText("Модерация заявок");
+        moderationButton.setCallbackData("moderation");
 
-            // Второй ряд кнопок
-            KeyboardRow row2 = new KeyboardRow();
-            row2.add(new KeyboardButton("Создать отчёт"));
+        InlineKeyboardButton faqButton = new InlineKeyboardButton();
+        faqButton.setText("Добавление FAQ");
+        faqButton.setCallbackData("addfaq");
 
-            keyboardRows.add(row1);
-            keyboardRows.add(row2);
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        row1.add(moderationButton);
+        row1.add(faqButton);
 
-            // Устанавливаем клавиатуру
-            ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
-            keyboardMarkup.setKeyboard(keyboardRows);
-            keyboardMarkup.setResizeKeyboard(true); // Автоматическое изменение размера кнопок
+        // Вторая строка
+        InlineKeyboardButton reportButton = new InlineKeyboardButton();
+        reportButton.setText("Отчетность");
+        reportButton.setCallbackData("report");
 
-            panel.setReplyMarkup(keyboardMarkup);
+        InlineKeyboardButton systemButton = new InlineKeyboardButton();
+        systemButton.setText("Система");
+        systemButton.setCallbackData("system");
 
-            try {
-                execute(panel);
-            } catch (TelegramApiException e) {
-                e.printStackTrace();
-            }
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+        row2.add(reportButton);
+        row2.add(systemButton);
+
+        keyboard.add(row1);
+        keyboard.add(row2);
+        keyboardMarkup.setKeyboard(keyboard);
+        message.setReplyMarkup(keyboardMarkup);
+
+        telegramBot.execute(message);
+    }
+
+    // Обработка callback для различных кнопок
+    public void handleAdminCallback(Long chatId, String callbackData, TelegramBot telegramBot) throws TelegramApiException {
+        switch (callbackData) {
+            case "moderation":
+                sendTextMessage(chatId, "Вы выбрали модерацию заявок.", telegramBot);
+                break;
+            case "addfaq":
+                sendTextMessage(chatId, "Вы выбрали добавление FAQ.", telegramBot);
+                break;
+            case "report":
+                sendTextMessage(chatId, "Вы выбрали отчетность.", telegramBot);
+                break;
+            case "system":
+                showSystemOptions(chatId, telegramBot);
+                break;
+            case "back_to_admin_panel":
+                showAdminPanel(chatId, telegramBot);
+                break;
+            case "addadmin":
+                sendTextMessage(chatId, "Введите Telegram ID для добавления администратора:\nПример: addadmin:123456789", telegramBot);
+                break;
+            case "removeadmin":
+                sendTextMessage(chatId, "Введите Telegram ID для удаления администратора:\nПример: removeadmin:123456789", telegramBot);
+                break;
         }
     }
 
-    @Override
-    public void onUpdatesReceived(List<Update> updates) {
-        super.onUpdatesReceived(updates);
+    // Метод для отображения кнопок для управления администраторами
+    public void showSystemOptions(Long chatId, TelegramBot telegramBot) throws TelegramApiException {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("Система: Выберите действие:");
+
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        // Первая строка
+        InlineKeyboardButton addAdminButton = new InlineKeyboardButton();
+        addAdminButton.setText("Добавить администратора");
+        addAdminButton.setCallbackData("addadmin");
+
+        InlineKeyboardButton removeAdminButton = new InlineKeyboardButton();
+        removeAdminButton.setText("Удалить администратора");
+        removeAdminButton.setCallbackData("removeadmin");
+
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        row1.add(addAdminButton);
+        row1.add(removeAdminButton);
+
+        // Вторая строка - кнопка назад
+        InlineKeyboardButton backButton = new InlineKeyboardButton();
+        backButton.setText("⬅️ Назад");
+        backButton.setCallbackData("back_to_admin_panel");
+
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+        row2.add(backButton);
+
+        keyboard.add(row1);
+        keyboard.add(row2);
+        keyboardMarkup.setKeyboard(keyboard);
+        message.setReplyMarkup(keyboardMarkup);
+
+        telegramBot.execute(message);
     }
 
-    @Override
-    public String getBotUsername() {
-        return "";
+    // Метод для отправки текстового сообщения
+    public void sendTextMessage(Long chatId, String text, TelegramBot telegramBot) throws TelegramApiException {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText(text);
+        telegramBot.execute(message);
     }
 
-    @Override
-    public void onRegister() {
-        super.onRegister();
+    // Пример для обработки добавления и удаления администраторов
+    public void processAdminAction(Long chatId, String text, TelegramBot telegramBot) throws TelegramApiException {
+        if (text.startsWith("addadmin:")) {
+            String tgIdString = text.substring(9);
+            try {
+                Long tgId = Long.parseLong(tgIdString);
+                adminAuthService.addAdmin(tgId);
+                sendTextMessage(chatId, "✅ Новый администратор добавлен.", telegramBot);
+            } catch (NumberFormatException e) {
+                sendTextMessage(chatId, "❌ Неверный формат Telegram ID.", telegramBot);
+            }
+        } else if (text.startsWith("removeadmin:")) {
+            String tgIdString = text.substring(12);
+            try {
+                Long tgId = Long.parseLong(tgIdString);
+                adminAuthService.removeAdmin(tgId);
+                sendTextMessage(chatId, "✅ Администратор удален.", telegramBot);
+            } catch (NumberFormatException e) {
+                sendTextMessage(chatId, "❌ Неверный формат Telegram ID.", telegramBot);
+            }
+        }
     }
 }
