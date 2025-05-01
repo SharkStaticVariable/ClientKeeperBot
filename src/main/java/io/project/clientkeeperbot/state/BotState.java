@@ -5,8 +5,6 @@ public enum BotState {
     START,
     WAITING_CAPTCHA,
     MAIN_MENU,
-    CREATING_TICKET,
-    TICKET_DETAILS_INPUT,
 
     // Состояния для администраторов
     ADMIN_MAIN_MENU,
@@ -15,18 +13,15 @@ public enum BotState {
     REPORTS_MENU,
     SYSTEM_SETTINGS,
 
-    PROJECT_TYPE,
-    PROJECT_DESCRIPTION,
-    PROJECT_DEADLINE,
-    PROJECT_BUDGET,
-    PROJECT_CONTACT,
-    PROJECT_ATTACHMENTS,
-    PROJECT_COMPLETE,
-    READY,
 
-    REVIEW_REQUEST,                    // Просмотр и редактирование заявки
-    EDIT_FIELD_SELECTION,
-    EDITING_FIELD,
+    READY,
+    ENTER_CUSTOM_PROJECT_TYPE,
+    CONFIRM_CANCEL,
+    ATTACHMENT_WAITING_FILE, // ожидание, что пользователь отправит файл
+    ASK_ATTACHMENTS_DECISION,
+    ASK_ATTACHMENTS,
+    WAITING_FOR_ATTACHMENTS,
+
     EDIT_PROJECT_TYPE,
     EDIT_DESCRIPTION,
     EDIT_DEADLINE,
@@ -39,14 +34,5 @@ public enum BotState {
     ASK_BUDGET,
     ASK_CONTACT,
     REVIEW_DRAFT,
-
-    AWAITING_PROJECT_TYPE,        // Ожидает тип проекта
-    AWAITING_PROJECT_DESCRIPTION, // Ожидает краткое описание
-    AWAITING_PROJECT_DEADLINE,    // Ожидает срок
-    AWAITING_PROJECT_BUDGET,      // Ожидает бюджет
-    AWAITING_PROJECT_CONTACT,     // Ожидает контакт
-    AWAITING_PROJECT_FILES,       // Ожидает файлы
-    FINAL_SUBMISSION,             // Завершение и отправка заявки
-    IDLE                          // Ожидание команды
 
 }

@@ -17,4 +17,22 @@ public class RequestDraftMemoryService {
     public void clearDraft(Long userId) {
         draftMap.remove(userId);
     }
+
+
+//    public void addAttachment(Long chatId, String fileId) {
+//        RequestsDraft draft = getDraft(chatId);
+//        if (draft.getAttachmentFileIds().size() >= 3) {
+//            throw new IllegalStateException("Нельзя прикрепить больше 3 файлов.");
+//        }
+//        draft.getAttachmentFileIds().add(fileId);
+//    }
+//
+//    public void removeAttachment(Long chatId, int index) {
+//        RequestsDraft draft = getDraft(chatId);
+//        if (index >= 0 && index < draft.getAttachmentFileIds().size()) {
+//            draft.getAttachmentFileIds().remove(index);
+//        }
+//    }
+
+
 }

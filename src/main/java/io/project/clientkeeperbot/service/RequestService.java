@@ -1,5 +1,6 @@
 package io.project.clientkeeperbot.service;
 
+//import io.project.clientkeeperbot.entity.Attachment;
 import io.project.clientkeeperbot.entity.Request;
 import io.project.clientkeeperbot.entity.RequestsDraft;
 import io.project.clientkeeperbot.repository.RequetRepository;
@@ -89,6 +90,17 @@ public class RequestService {
         finalRequest.setBudget(draft.getBudget());
         finalRequest.setContact(draft.getContact());
         finalRequest.setClientId(chatId); // или другое поле для идентификации клиента
+        finalRequest.setStatus("Новая");
+        // attachments
+//        List<Attachment> attachments = draft.getAttachmentFileIds().stream()
+//                .map(fileId -> {
+//                    Attachment attachment = new Attachment();
+//                    attachment.setFileId(fileId);
+//                    attachment.setRequest(finalRequest);
+//                    return attachment;
+//                })
+//                .toList();
+//        finalRequest.setAttachments(attachments);
 
         requestRepository.save(finalRequest);
         draftMemoryService.clearDraft(chatId);  // очищаем черновик

@@ -22,5 +22,8 @@ private final UserRepository userRepo;
             userRepo.save(user);
         }
     }
+    public boolean isUserRegistered(Long chatId) {
+        return userRepo.existsByTelegramId(chatId);
+    }
 
 }

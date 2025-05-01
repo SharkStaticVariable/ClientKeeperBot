@@ -24,8 +24,9 @@ public class Request {
     private String budget;
     private String contact;
 
-    @ElementCollection
-    private List<String> attachmentPaths = new ArrayList<>();
+//    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
+//    private List<Attachment> attachments = new ArrayList<>();
+
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }

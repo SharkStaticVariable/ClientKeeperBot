@@ -19,7 +19,7 @@ public class RequestsDraft {
     private String budget;
     private String contact;
 
-    @ElementCollection
-    private List<String> attachmentPaths = new ArrayList<>();
+//    private List<String> attachmentFileIds = new ArrayList<>(); // новые поля для временного хранения файлов
+
 
 }
