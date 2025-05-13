@@ -9,7 +9,6 @@ import io.project.clientkeeperbot.state.BotState;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
@@ -30,6 +29,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -42,8 +42,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final BotStateContextService botStateContextService;
     private final RequestService requestService;
     private final RequestDraftMemoryService draftMemoryService;
-
-    private final CommandAccessFilter commandAccessFilter;
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
     private void sendTextMessage(Long chatId, String text) throws TelegramApiException {
@@ -74,16 +72,13 @@ public class TelegramBot extends TelegramLongPollingBot {
         executorService.submit(() -> processUpdate(update));
     }
 
-
-
-
-
     private void processUpdate(Update update) {
 
         if (update.hasMessage() && update.getMessage().hasText()) {
             Long chatId = update.getMessage().getChatId();
             String text = update.getMessage().getText();
             User telegramUser = update.getMessage().getFrom();
+            String messageText = update.getMessage().getText(); //если что убрать
 
             try {
                 // Проверка: если админ
@@ -92,7 +87,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                         sendTextMessage(chatId, "Вы администратор. Для управления введите /admin.");
                         return;
                     }
-                    handleAdminCommands(chatId, text); // обработка других команд админа
+                    adminService.handleAdminText(chatId, messageText, this);
+                    handleAdminCommands(chatId, text);
                     return;
                 }
 
@@ -101,6 +97,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     sendTextMessage(chatId, "🛑 Данная команда вам недоступна. Введите /start для работы с ботом.");
                     return;
                 }
+
                 // Проверка: пользователь зарегистрирован
                 boolean isRegistered = userService.isUserRegistered(chatId);
 
@@ -108,17 +105,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                 if (text.equals("/start")) {
                     if (isRegistered) {
                         handleStartCommand2(chatId, update);
-                        sendMainMenu(chatId); // зарегистрированному показываем меню
+                        sendReplyKeyboardWithMenuButton(chatId);
                     } else {
                         botStateContextService.setBotState(chatId, BotState.WAITING_CAPTCHA);
-                        sendCaptcha(chatId); // незарегистрированному капчу
+                        handleStartCommand(chatId, update);
                     }
-                    return;
-                }
-
-                // Проверка: если пользователь НЕ зарегистрирован — направляем к капче
-                if (!isRegistered) {
-                    sendTextMessage(chatId, "Пожалуйста, введите капчу для продолжения.");
                     return;
                 }
 
@@ -135,7 +126,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     handleCaptchaInput(chatId, text, telegramUser, botStateContext);
                     return;
                 }
-
                 handleUserCommands(chatId, text, currentState);
             } catch (Exception e) {
                 handleError(chatId, e);
@@ -145,32 +135,28 @@ public class TelegramBot extends TelegramLongPollingBot {
         // Обработка callback-запросов
         if (update.hasCallbackQuery()) {
             CallbackQuery callbackQuery = update.getCallbackQuery();
+            Long chatId = callbackQuery.getMessage().getChatId();
+            String callbackData = callbackQuery.getData();
 
             try {
-                // Передаем весь объект CallbackQuery в handleCallbackQuery
+                // Проверка: если админ — обрабатываем отдельным методом
+                if (adminAuthService.isAdmin(chatId)) {
+                    adminService.handleAdminCallback(chatId, callbackData, this);
+                    return;
+                }
+                // Общая обработка callback для пользователей
                 handleCallbackQuery(callbackQuery);
             } catch (Exception e) {
-                Long chatId = callbackQuery.getMessage().getChatId(); // получаем chatId из callbackQuery в случае ошибки
                 handleError(chatId, e);
             }
         }
-
     }
-
-
-
-
 
     private void handleCallbackQuery(CallbackQuery callbackQuery) throws TelegramApiException {
         Long chatId = callbackQuery.getMessage().getChatId();
         String callbackData = callbackQuery.getData();
 
-        String data = callbackQuery.getData();
-        Integer messageId = callbackQuery.getMessage().getMessageId();
-
-
         if (callbackData.startsWith("type:")) {
-            // Выбрали тип проекта (например, "type:Сайт" или "type:Другое")
             String selectedType = callbackData.substring(5);
             requestService.setType(chatId, selectedType);
 
@@ -179,15 +165,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 sendTextMessage(chatId, "Введите свой вариант типа проекта:");
             } else {
                 botStateContextService.setBotState(chatId, BotState.ASK_DESCRIPTION);
-//                sendDraftSummaryWithActions(chatId);
                 sendTextMessage(chatId, "Опишите ваш проект:");
-
             }
             return;
         }
-
-
-
 
         switch (callbackData) {
             case "faq" -> sendTextMessage(chatId, "FAQ: Как я могу помочь вам?");
@@ -198,9 +179,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             case "create_request" -> {
                 requestService.startDraft(chatId);
                 botStateContextService.setBotState(chatId, BotState.ENTER_CUSTOM_PROJECT_TYPE);
-//                sendTextMessage(chatId, "Выберите тип проекта:");
                 sendProjectTypeOptions(chatId);
-
             }
             case "edit_type" -> {
                 botStateContextService.setBotState(chatId, BotState.EDIT_PROJECT_TYPE);
@@ -227,6 +206,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 botStateContextService.setBotState(chatId, BotState.MAIN_MENU);
                 sendTextMessage(chatId, "✅ Ваша заявка принята, ожидайте ответа.");
                 sendMainMenu(chatId);
+
             }
             case "cancel_request" -> {
                 botStateContextService.setBotState(chatId, BotState.CONFIRM_CANCEL);
@@ -235,18 +215,20 @@ public class TelegramBot extends TelegramLongPollingBot {
             case "confirm_cancel" -> {
                 draftMemoryService.clearDraft(chatId); // Удаляем черновик
                 botStateContextService.setBotState(chatId, BotState.MAIN_MENU);
+
                 sendTextMessage(chatId, "❌ Ваша заявка отменена.");
                 sendMainMenu(chatId);
+
             }
             case "cancel_cancel" -> {
                 botStateContextService.setBotState(chatId, BotState.REVIEW_DRAFT);
                 sendDraftSummaryWithActions(chatId);
             }
-
             default -> sendTextMessage(chatId, "Неизвестная команда.");
         }
 
     }
+
     private void sendCancelConfirmation(Long chatId) throws TelegramApiException {
         InlineKeyboardMarkup inlineKeyboard = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -301,20 +283,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         ).trim(); // .trim() удаляет лишний пробел, если фамилия пустая
 
         sendTextMessage(chatId, welcomeMessage);
-
-//        BotStateContext botStateContext = botStateContextService.getBotStateContext(chatId);
-//        if (botStateContext == null) {
-//            System.out.println("State is null, setting to WAITING_CAPTCHA");
-//            botStateContextService.setBotState(chatId, BotState.WAITING_CAPTCHA);
-//        }
-//        captchaService.storeUserData(chatId, telegramUser);
     }
 
     private void handleCaptchaInput(Long chatId, String inputText, User telegramUser, BotStateContext botStateContext) throws TelegramApiException {
         if (captchaService.verifyCaptcha(chatId, inputText)) {
             userService.registerUser(telegramUser);
             sendSuccessMessage(chatId);
-//            sendMainMenu(chatId);
             botStateContextService.setBotState(chatId, BotState.MAIN_MENU);
         } else {
             sendTextMessage(chatId, "Неверный код капчи. Попробуйте еще раз.");
@@ -324,7 +298,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void handleAdminCommands(Long chatId, String text) throws TelegramApiException {
         if (text.equals("/admin")) {
-            adminService.showAdminPanel(chatId, this);
+              adminService.sendReplyKeyboardWithMenuButtonAdmin(chatId, this);
         } else if (text.equals("/start")) {
             sendTextMessage(chatId, "⚠️ Вы уже в админ-панели, если нет, то введите команду /admin");
         }
@@ -357,7 +331,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     req.getDeadline(),
                     req.getBudget(),
                     req.getContact(),
-                    req.getStatus()
+                    req.getStatus().getDisplayName()
             );
 
             InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
@@ -391,17 +365,62 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    private void sendReplyKeyboardWithMenuButton(Long chatId) throws TelegramApiException {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("Обратитесь в меню"); // Отправит пробел — Telegram примет
 
+        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
+        List<KeyboardRow> keyboard = new ArrayList<>();
 
+        KeyboardRow row = new KeyboardRow();
+        row.add(new KeyboardButton("📋 Меню"));
+        keyboard.add(row);
 
+        markup.setKeyboard(keyboard);
+        markup.setResizeKeyboard(true);
+
+        markup.setOneTimeKeyboard(false); // чтобы кнопка не исчезала
+
+        message.setReplyMarkup(markup);
+
+        execute(message);
+    }
+
+    private static final Pattern TELEGRAM_USERNAME_PATTERN = Pattern.compile("^@?[a-zA-Z0-9_]{5,32}$");
+
+    public boolean isValidTelegramUsername(String input) {
+        return TELEGRAM_USERNAME_PATTERN.matcher(input).matches();
+    }
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$");
+
+    public boolean isValidEmail(String input) {
+        return EMAIL_PATTERN.matcher(input).matches();
+    }
+
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9]{10,15}$");
+
+    public boolean isValidPhone(String input) {
+        return PHONE_PATTERN.matcher(input).matches();
+    }
+    public boolean isValidContact(String input) {
+        return isValidPhone(input) || isValidEmail(input) || isValidTelegramUsername(input);
+    }
+    public boolean isValidRequest(RequestsDraft draft) {
+        return draft.getType() != null && !draft.getType().isBlank()
+                && draft.getDescription() != null && !draft.getDescription().isBlank()
+                && draft.getDeadline() != null
+                && draft.getBudget() != null && !draft.getBudget().isBlank()
+                && draft.getContact() != null && !draft.getContact().isBlank();
+    }
 
     private void handleUserCommands(Long chatId, String text, BotState currentState) throws TelegramApiException {
-//        if (!commandAccessFilter.isAllowed(currentState, text)) {
-//            sendTextMessage(chatId, "Вы сейчас в процессе создания заявки. Завершите текущий шаг или нажмите ❌ Отменить создание заявки.");
-//            return;
-//        }
+        if (text.equals("📋 Меню")) {
+            sendMainMenu(chatId);
+            return;
+        }
         switch (currentState) {
-
             case START -> {
                 sendTextMessage(chatId, "Добро пожаловать! Введите /start, чтобы начать работу.");
             }
@@ -416,13 +435,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     case "Создать заявку" -> {
                         requestService.startDraft(chatId);
                         botStateContextService.setBotState(chatId, BotState.ENTER_CUSTOM_PROJECT_TYPE);
-//                        sendTextMessage(chatId, "Выберите тип проекта:");
                         sendProjectTypeOptions(chatId);
                     }
                     case "Мои заявки" -> {
                         sendUserRequests(chatId); // <--- новый метод
                     }
-
                     case "Назад" -> sendTextMessage(chatId, "Вы вернулись в главное меню.");
                 }
             }
@@ -458,15 +475,15 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
 
             case ASK_CONTACT -> {
+                if (!isValidContact(text)) {
+                    sendTextMessage(chatId, "❌ Неверный контакт. Введите номер телефона, email или Telegram username.\n\nПримеры:\n+79001234567\nuser@example.com\n@telegram_user");
+                    return;
+                }
+
                 requestService.setContact(chatId, text);
                 botStateContextService.setBotState(chatId, BotState.REVIEW_DRAFT);
 
                 sendDraftSummaryWithActions(chatId);
-//                SendMessage message = new SendMessage();
-//                message.setChatId(chatId.toString());
-//                message.setText("Хотите прикрепить файлы к заявке? 📎");
-//                message.setReplyMarkup(yesNoInlineKeyboard("attachments_yes", "attachments_no"));
-
             }
 
 
@@ -494,15 +511,12 @@ public class TelegramBot extends TelegramLongPollingBot {
 //                }
 //            }
 
-
-
             case REVIEW_DRAFT -> {
                 switch (text) {
                     case "✏️ Изменить тип проекта" -> {
                         botStateContextService.setBotState(chatId, BotState.EDIT_PROJECT_TYPE);
                         sendTextMessage(chatId, "Введите новый тип проекта:");
                         sendProjectTypeOptions(chatId);
-
                     }
                     case "✏️ Изменить описание" -> {
                         botStateContextService.setBotState(chatId, BotState.EDIT_DESCRIPTION);
@@ -520,12 +534,29 @@ public class TelegramBot extends TelegramLongPollingBot {
                         botStateContextService.setBotState(chatId, BotState.EDIT_CONTACT);
                         sendTextMessage(chatId, "Введите удобный способ связи: номер телефона, email или ник Telegram:");
                     }
+//                    case "✅ Отправить заявку" -> {
+//                        requestService.saveFinalRequest(chatId);
+//                        botStateContextService.setBotState(chatId, BotState.MAIN_MENU);
+//
+//                        sendTextMessage(chatId, "✅ Ваша заявка принята, ожидайте ответа.");
+//                        sendMainMenu(chatId);
+//                    }
                     case "✅ Отправить заявку" -> {
+                        RequestsDraft draft = draftMemoryService.getDraft(chatId);
+
+                        if (!isValidRequest(draft)) {
+                            sendTextMessage(chatId, "❌ Невозможно сохранить заявку. Все поля должны быть заполнены.");
+                            return;
+                        }
+
                         requestService.saveFinalRequest(chatId);
                         botStateContextService.setBotState(chatId, BotState.MAIN_MENU);
                         sendTextMessage(chatId, "✅ Ваша заявка принята, ожидайте ответа.");
+
                         sendMainMenu(chatId);
                     }
+
+
                     default -> sendTextMessage(chatId, "Пожалуйста, выберите действие с кнопок ниже.");
                 }
             }
@@ -559,13 +590,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                 botStateContextService.setBotState(chatId, BotState.REVIEW_DRAFT);
                 sendDraftSummaryWithActions(chatId);
             }
+            default -> sendTextMessage(chatId, "Пожалуйста, продолжите свое действие");
         }
     }
 
-
-
     private void sendDraftSummaryWithActions(Long chatId) throws TelegramApiException {
-//        RequestsDraft draft = draftMemoryService.getDraft(chatId);
         String summary = requestService.getDraftSummary(chatId);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -589,14 +618,10 @@ public class TelegramBot extends TelegramLongPollingBot {
 //            summary += "\n\n📎 Нет прикрепленных файлов.";
 //        }
 
-
-
         InlineKeyboardMarkup inlineKeyboard = new InlineKeyboardMarkup();
 
         rows.add(List.of(button("✏️ Изменить тип проекта", "edit_type"), button("✏️ Изменить описание", "edit_description")));
-
         rows.add(List.of(button("✏️ Изменить сроки", "edit_deadline"), button("✏️ Изменить бюджет", "edit_budget")));
-
         rows.add(List.of(button("✏️ Изменить контакт", "edit_contact")));
         rows.add(List.of(button("❌ Отменить заявку", "cancel_request"),button("✅ Отправить заявку", "submit_request")));
 
@@ -613,12 +638,12 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void sendProjectTypeOptions(Long chatId) throws TelegramApiException {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        rows.add(List.of(createButton("🌐 Сайт", "type:Сайт")));
-        rows.add(List.of(createButton("📱 Мобильное приложение", "type:Мобильное приложение")));
-        rows.add(List.of(createButton("🤖 Чат-бот", "type:Чат-бот")));
-        rows.add(List.of(createButton("⚙️ Автоматизация", "type:Автоматизация")));
-        rows.add(List.of(createButton("🎨 Дизайн", "type:Дизайн")));
-        rows.add(List.of(createButton("🧠 Другое", "type:Другое")));
+        rows.add(List.of(button("🌐 Сайт", "type:Сайт")));
+        rows.add(List.of(button("📱 Мобильное приложение", "type:Мобильное приложение")));
+        rows.add(List.of(button("🤖 Чат-бот", "type:Чат-бот")));
+        rows.add(List.of(button("⚙️ Автоматизация", "type:Автоматизация")));
+        rows.add(List.of(button("🎨 Дизайн", "type:Дизайн")));
+        rows.add(List.of(button("🧠 Другое", "type:Другое")));
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         markup.setKeyboard(rows);
@@ -664,13 +689,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         execute(menu);
     }
 
-    private InlineKeyboardButton createButton(String text, String callbackData) {
-        InlineKeyboardButton button = new InlineKeyboardButton();
-        button.setText(text);
-        button.setCallbackData(callbackData);
-        return button;
-    }
-
     private InlineKeyboardButton button(String text, String callbackData) {
         return InlineKeyboardButton.builder()
                 .text(text)
@@ -688,7 +706,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void sendSuccessMessage(Long chatId) throws TelegramApiException {
         sendTextMessage(chatId, "✅ Проверка пройдена успешно! Теперь вы можете пользоваться ботом.");
-        sendMainMenu(chatId);
+        sendReplyKeyboardWithMenuButton(chatId);
+
     }
 
     private void sendCaptcha(Long chatId) throws TelegramApiException {
@@ -716,4 +735,5 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         e.printStackTrace();
     }
+
 }

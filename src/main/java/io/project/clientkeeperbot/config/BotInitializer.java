@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.api.methods.updates.DeleteWebhook;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
@@ -24,6 +25,7 @@ public class BotInitializer {
         new Thread(this::startBotWithReconnect).start();
     }
 
+
     private void startBotWithReconnect() {
         while (true) {
             if (!isTelegramApiAvailable()) {
@@ -34,6 +36,7 @@ public class BotInitializer {
 
             try {
                 TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
+                telegramBot.clearWebhook();
                 botsApi.registerBot(telegramBot);
                 log.info("✅ Бот успешно запущен!");
                 break;

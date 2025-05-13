@@ -2,6 +2,7 @@ package io.project.clientkeeperbot.service;
 
 //import io.project.clientkeeperbot.entity.Attachment;
 import io.project.clientkeeperbot.entity.Request;
+import io.project.clientkeeperbot.entity.RequestStatus;
 import io.project.clientkeeperbot.entity.RequestsDraft;
 import io.project.clientkeeperbot.repository.RequetRepository;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +83,7 @@ public class RequestService {
 
     // Сохранение черновика в финальную заявку
     public void saveFinalRequest(Long chatId) {
+
         RequestsDraft draft = draftMemoryService.getDraft(chatId);
         Request finalRequest = new Request();
         finalRequest.setType(draft.getType());
@@ -90,7 +92,9 @@ public class RequestService {
         finalRequest.setBudget(draft.getBudget());
         finalRequest.setContact(draft.getContact());
         finalRequest.setClientId(chatId); // или другое поле для идентификации клиента
-        finalRequest.setStatus("Новая");
+        finalRequest.setStatus(RequestStatus.NEW); // ✅
+
+//        finalRequest.setStatus("Новая");
         // attachments
 //        List<Attachment> attachments = draft.getAttachmentFileIds().stream()
 //                .map(fileId -> {
@@ -104,6 +108,35 @@ public class RequestService {
 
         requestRepository.save(finalRequest);
         draftMemoryService.clearDraft(chatId);  // очищаем черновик
+    }
+//public boolean saveFinalRequest(Long chatId) {
+//    RequestsDraft draft = draftMemoryService.getDraft(chatId);
+//
+//    if (!isValidDraft(draft)) {
+//        return false; // не сохраняем
+//    }
+//
+//    Request finalRequest = new Request();
+//    finalRequest.setType(draft.getType());
+//    finalRequest.setDescription(draft.getDescription());
+//    finalRequest.setDeadline(draft.getDeadline());
+//    finalRequest.setBudget(draft.getBudget());
+//    finalRequest.setContact(draft.getContact());
+//    finalRequest.setClientId(chatId);
+//    finalRequest.setStatus(RequestStatus.NEW);
+//
+//    requestRepository.save(finalRequest);
+//    draftMemoryService.clearDraft(chatId);
+//    return true;
+//}
+
+    private boolean isValidDraft(RequestsDraft draft) {
+        return draft != null
+                && draft.getType() != null && !draft.getType().isBlank()
+                && draft.getDescription() != null && !draft.getDescription().isBlank()
+                && draft.getDeadline() != null
+                && draft.getBudget() != null
+                && draft.getContact() != null && !draft.getContact().isBlank();
     }
 
     // Получение черновика для данного чата

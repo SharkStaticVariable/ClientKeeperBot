@@ -5,7 +5,6 @@ import io.project.clientkeeperbot.repository.AdminRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-
 @Service
 @RequiredArgsConstructor
 public class AdminAuthService {
@@ -29,4 +28,4 @@ public class AdminAuthService {
         adminRepository.deleteById(tgId);
     }
 }
-//    private static final List<Long> ADMIN_IDS = List.of(6180241984L); // Список ID админов
+//6180241984L // ID админа

@@ -25,6 +25,7 @@ public class BotStateContextService {
         return botStateContext.orElse(null);  // Если не найдено, возвращаем null
     }
 
+
     /**
      * Обновить состояние пользователя в базе данных
      * @param userId ID пользователя
@@ -50,46 +51,4 @@ public class BotStateContextService {
         botStateContextRepository.save(botStateContext);
     }
 
-
-    /**
-     * Обновить черновик заявки пользователя
-     * @param userId ID пользователя
-     * @param updateTicketDraft Лямбда-функция для обновления черновика
-     */
-    public void updateTicketDraft(Long userId, TicketDraftUpdateFunction updateTicketDraft) {
-        BotStateContext botStateContext = getBotStateContext(userId);
-
-        if (botStateContext == null) {
-            // Если состояния нет, создать новое состояние
-            botStateContext = new BotStateContext();
-            botStateContext.setUserId(userId.toString());
-            botStateContext.setCurrentState(BotState.READY);
-            botStateContext.setLastUpdated(LocalDateTime.now());
-            botStateContext.setDraft(new RequestsDraft());  // Инициализируем черновик
-        }
-
-        // Обновляем черновик
-        RequestsDraft draft = botStateContext.getDraft();
-        updateTicketDraft.update(draft);
-
-        botStateContext.setDraft(draft);  // Сохраняем обновленный черновик
-        botStateContextRepository.save(botStateContext);
-    }
-
-    /**
-     * Уведомить администратора о новой заявке
-     * (Эту логику нужно реализовать в отдельном методе, который будет отправлять сообщение)
-     * @param userId ID пользователя, создавшего заявку
-     */
-    public void notifyAdmin(Long userId) {
-        // Пример логики уведомления администратора
-        // Здесь можно использовать Telegram API для отправки сообщения администратору
-        String adminMessage = "Новая заявка от пользователя " + userId;
-        // sendMessageToAdmin(adminMessage);  // Эта функция будет отправлять уведомление админу
-    }
-
-    @FunctionalInterface
-    public interface TicketDraftUpdateFunction {
-        void update(RequestsDraft ticketDraft);
-    }
 }

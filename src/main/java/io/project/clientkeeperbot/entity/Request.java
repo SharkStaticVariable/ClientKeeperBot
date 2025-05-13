@@ -1,6 +1,7 @@
 package io.project.clientkeeperbot.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -17,10 +18,15 @@ public class Request {
     private Long id;
 
     private Long clientId;
-    private String status;
+
+    @Enumerated(EnumType.STRING)
+    private RequestStatus status;
+
+    @NotNull
     private String type;
     private String description;
     private String deadline;
+    @NotNull
     private String budget;
     private String contact;
 
